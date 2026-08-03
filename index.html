@@ -61,6 +61,17 @@
     transition:background .15s, border-color .15s;
   }
   .site-nav a:hover, .site-nav button:hover{background:rgba(250,247,240,0.1);border-color:rgba(250,247,240,0.5);}
+  .site-nav select{
+    color:var(--paper);
+    background:var(--teal-deep);
+    border:1px solid rgba(250,247,240,0.28);
+    padding:8px 12px;
+    border-radius:3px;
+    font-size:13.5px;
+    font-weight:500;
+    font-family:var(--font-body);
+  }
+  .site-nav select:hover{border-color:rgba(250,247,240,0.5);}
 
   /* ---------- Disclosure ---------- */
   .disclosure{
@@ -83,6 +94,31 @@
     letter-spacing:-0.02em;
   }
   .hero p{color:var(--ink-soft);margin:0;font-size:15.5px;max-width:560px;}
+
+  .country-banner{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    background:var(--paper-dim);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:12px 16px;
+    margin-bottom:24px;
+    flex-wrap:wrap;
+  }
+  .country-banner span{font-size:13.5px;color:var(--ink-soft);}
+  .country-banner span b{color:var(--ink);}
+  .country-banner a{
+    font-size:13px;
+    font-weight:600;
+    color:var(--teal-light);
+    border:1px solid var(--line);
+    padding:6px 12px;
+    border-radius:3px;
+    background:#fff;
+  }
+  .country-banner a:hover{background:var(--paper);}
 
   /* ---------- Controls ---------- */
   .controls{
@@ -270,10 +306,75 @@
     font-size:12.5px;color:var(--ink-soft);margin-top:8px;
   }
 
+  /* ---------- Newsletter ---------- */
+  .subscribe-section{
+    margin-top:56px;
+    background:var(--teal-deep);
+    color:var(--paper);
+    border-radius:6px;
+    padding:36px 32px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:28px;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .subscribe-copy{max-width:360px;}
+  .subscribe-copy h3{
+    font-family:var(--font-display);
+    font-size:22px;
+    margin:0 0 6px;
+  }
+  .subscribe-copy p{
+    margin:0;
+    font-size:13.5px;
+    color:rgba(250,247,240,0.75);
+  }
+  .subscribe-form{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    flex:1;
+    justify-content:flex-end;
+  }
+  .subscribe-form input{
+    font-family:var(--font-body);
+    padding:11px 14px;
+    border:1px solid rgba(250,247,240,0.28);
+    border-radius:3px;
+    background:rgba(250,247,240,0.08);
+    color:var(--paper);
+    font-size:14px;
+    min-width:180px;
+  }
+  .subscribe-form input::placeholder{color:rgba(250,247,240,0.55);}
+  .subscribe-form input:focus{outline:none;border-color:var(--mustard);}
+  .subscribe-form button{
+    background:var(--mustard);
+    color:var(--teal-deep);
+    border:none;
+    padding:11px 22px;
+    border-radius:3px;
+    font-weight:600;
+    font-size:14px;
+    white-space:nowrap;
+  }
+  .subscribe-form button:hover{background:var(--mustard-deep);}
+  .subscribe-msg{
+    width:100%;
+    font-size:13px;
+    margin-top:4px;
+  }
+  .subscribe-msg.ok{color:#9FE0B8;}
+  .subscribe-msg.err{color:#F0A79E;}
+
   @media (max-width:600px){
     .form-grid{grid-template-columns:1fr;}
     main{padding:28px 18px 60px;}
     .site-header{padding:18px 18px;}
+    .subscribe-section{padding:28px 20px;}
+    .subscribe-form{justify-content:flex-start;}
+    .subscribe-form input{flex:1;min-width:0;}
   }
 </style>
 </head>
@@ -298,6 +399,18 @@ let ADMIN_PASSWORD = localStorage.getItem('sift_admin_pw') || "Riya@135171";
 
 const STORAGE_KEY = 'sift_products';
 const AUTH_KEY = 'sift_admin_session';
+const SUBSCRIBERS_KEY = 'sift_subscribers';
+
+// Google Apps Script "Web app" URL — subscriber signups get sent here
+// so they land directly in your Google Sheet.
+const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx5-YegZdLrzlKK2FFnjmyQZvACrvhHtcUF5oX7wZN05cbmhrJUD72e-NP0kYZYConFmw/exec";
+// code = used internally & in the URL hash (#country/US)
+// label = shown to visitors
+const COUNTRIES = [
+  { code: 'US', label: 'United States' },
+  { code: 'IN', label: 'India' },
+  { code: 'AE', label: 'UAE' }
+];
 
 /* =========================================================
    DATA LAYER
@@ -320,6 +433,7 @@ function seedIfEmpty(){
         imageUrl: "https://placehold.co/400x300/FAF7F0/1F5A50?text=Product+Image",
         price: "19.99",
         category: "Example",
+        country: "ALL",
         affiliateUrl: "https://www.amazon.com/",
         dateAdded: Date.now()
       }
@@ -337,6 +451,21 @@ function escapeHtml(str){
   div.textContent = str == null ? '' : String(str);
   return div.innerHTML;
 }
+function countryLabel(code){
+  const c = COUNTRIES.find(c => c.code === code);
+  return c ? c.label : code;
+}
+function getSubscribers(){
+  try{
+    return JSON.parse(localStorage.getItem(SUBSCRIBERS_KEY)) || [];
+  }catch(e){ return []; }
+}
+function saveSubscribers(list){
+  localStorage.setItem(SUBSCRIBERS_KEY, JSON.stringify(list));
+}
+function isValidEmail(email){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
 /* =========================================================
    ROUTER
@@ -347,49 +476,79 @@ window.addEventListener('DOMContentLoaded', () => {
   render();
 });
 
+// Returns { name: 'home'|'admin'|'country', param: 'US'|null }
 function currentRoute(){
-  return location.hash.replace('#','') || 'home';
+  const raw = location.hash.replace('#','') || 'home';
+  const parts = raw.split('/');
+  return { name: parts[0], param: parts[1] || null };
 }
 
 function render(){
   const route = currentRoute();
   renderNav(route);
   const app = document.getElementById('app');
-  if(route === 'admin'){
+  if(route.name === 'admin'){
     app.innerHTML = isLoggedIn() ? '' : loginView();
     if(isLoggedIn()){ renderDashboard(app); }
     else{ attachLoginHandlers(); }
+  } else if(route.name === 'country' && route.param){
+    app.innerHTML = homeView(route.param);
+    attachHomeHandlers(route.param);
   } else {
-    app.innerHTML = homeView();
-    attachHomeHandlers();
+    app.innerHTML = homeView(null);
+    attachHomeHandlers(null);
   }
 }
 
 function renderNav(route){
   const nav = document.getElementById('navArea');
-  if(route === 'admin' && isLoggedIn()){
-    nav.innerHTML = `<a href="#home">View site</a><button id="logoutBtn">Log out</button>`;
+  const countrySelectHtml = `
+    <select id="countrySelect" title="Choose your country">
+      <option value="">All countries</option>
+      ${COUNTRIES.map(c => `<option value="${c.code}" ${route.name === 'country' && route.param === c.code ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
+    </select>
+  `;
+
+  if(route.name === 'admin' && isLoggedIn()){
+    nav.innerHTML = `${countrySelectHtml}<a href="#home">View site</a><button id="logoutBtn">Log out</button>`;
     document.getElementById('logoutBtn').onclick = () => {
       sessionStorage.removeItem(AUTH_KEY);
       location.hash = '#home';
     };
   } else {
-    nav.innerHTML = `<a href="#admin">Admin</a>`;
+    nav.innerHTML = `${countrySelectHtml}<a href="#admin">Admin</a>`;
   }
+
+  const countrySelect = document.getElementById('countrySelect');
+  countrySelect.onchange = () => {
+    const val = countrySelect.value;
+    location.hash = val ? `#country/${val}` : '#home';
+  };
 }
 
 /* =========================================================
-   HOME VIEW
+   HOME VIEW  (also used for country-specific pages)
    ========================================================= */
-function homeView(){
-  const products = getProducts();
+function homeView(countryCode){
+  const allProducts = getProducts();
+  const products = countryCode
+    ? allProducts.filter(p => !p.country || p.country === 'ALL' || p.country === countryCode)
+    : allProducts;
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
+
+  const banner = countryCode ? `
+    <div class="country-banner">
+      <span>Showing products for <b>${escapeHtml(countryLabel(countryCode))}</b></span>
+      <a href="#home">View all products →</a>
+    </div>
+  ` : '';
 
   return `
     <div class="hero">
       <h1>Handpicked finds, one click away</h1>
       <p>A running list of products worth your attention. Tap any card to see it on Amazon.</p>
     </div>
+    ${banner}
     <div class="controls">
       <input type="text" id="searchInput" placeholder="Search products…">
       <select id="categoryFilter">
@@ -398,22 +557,84 @@ function homeView(){
       </select>
     </div>
     <div class="grid" id="productGrid"></div>
+
+    <div class="subscribe-section">
+      <div class="subscribe-copy">
+        <h3>Get new finds in your inbox</h3>
+        <p>Subscribe for occasional emails when we add new handpicked products. No spam.</p>
+      </div>
+      <form class="subscribe-form" id="subscribeForm">
+        <input type="text" id="subName" placeholder="Your name">
+        <input type="email" id="subEmail" placeholder="Your email">
+        <button type="submit">Subscribe</button>
+        <div class="subscribe-msg" id="subscribeMsg" style="display:none;"></div>
+      </form>
+    </div>
   `;
 }
 
-function attachHomeHandlers(){
+function attachHomeHandlers(countryCode){
   const searchInput = document.getElementById('searchInput');
   const categoryFilter = document.getElementById('categoryFilter');
-  const draw = () => drawGrid(searchInput.value, categoryFilter.value);
+  const draw = () => drawGrid(searchInput.value, categoryFilter.value, countryCode);
   searchInput.addEventListener('input', draw);
   categoryFilter.addEventListener('change', draw);
   draw();
+
+  const subForm = document.getElementById('subscribeForm');
+  const subMsg = document.getElementById('subscribeMsg');
+  subForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const nameInput = document.getElementById('subName');
+    const emailInput = document.getElementById('subEmail');
+    const name = nameInput.value.trim();
+    const email = emailInput.value.trim();
+
+    const showMsg = (text, ok) => {
+      subMsg.textContent = text;
+      subMsg.className = 'subscribe-msg ' + (ok ? 'ok' : 'err');
+      subMsg.style.display = 'block';
+    };
+
+    if(!name || !email){
+      showMsg('Please enter your name and email.', false);
+      return;
+    }
+    if(!isValidEmail(email)){
+      showMsg('Please enter a valid email address.', false);
+      return;
+    }
+    const subscribers = getSubscribers();
+    if(subscribers.some(s => s.email.toLowerCase() === email.toLowerCase())){
+      showMsg("You're already subscribed with that email.", false);
+      return;
+    }
+    subscribers.push({ id: cryptoId(), name, email, dateAdded: Date.now() });
+    saveSubscribers(subscribers);
+    nameInput.value = '';
+    emailInput.value = '';
+    showMsg("Thanks! You're subscribed.", true);
+
+    // Send to Google Sheet (fire-and-forget — Apps Script doesn't return
+    // readable CORS headers, so we use no-cors and don't wait on the result).
+    if(GOOGLE_SHEET_WEB_APP_URL){
+      fetch(GOOGLE_SHEET_WEB_APP_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ name, email })
+      }).catch(() => { /* ignore network errors, local copy is already saved */ });
+    }
+  });
 }
 
-function drawGrid(search, category){
+function drawGrid(search, category, countryCode){
   const grid = document.getElementById('productGrid');
   let products = getProducts();
 
+  if(countryCode){
+    products = products.filter(p => !p.country || p.country === 'ALL' || p.country === countryCode);
+  }
   if(search){
     const s = search.toLowerCase();
     products = products.filter(p =>
@@ -495,6 +716,14 @@ function renderDashboard(app){
       <div id="productList"></div>
 
       <div class="form-card" style="margin-top:30px;">
+        <div class="dash-header" style="margin-bottom:14px;">
+          <h3 style="font-family:var(--font-display);margin:0;">Newsletter subscribers</h3>
+          <button class="btn-ghost" id="exportSubsBtn">Export CSV</button>
+        </div>
+        <div id="subscriberList"></div>
+      </div>
+
+      <div class="form-card">
         <h3 style="font-family:var(--font-display);margin-top:0;">Change admin password</h3>
         <div class="form-grid">
           <div class="field full">
@@ -519,6 +748,47 @@ function renderDashboard(app){
     alert('Admin password updated.');
   };
   drawProductList(document.getElementById('productList'));
+  drawSubscriberList(document.getElementById('subscriberList'));
+
+  document.getElementById('exportSubsBtn').onclick = () => {
+    const subs = getSubscribers();
+    if(subs.length === 0){ alert('No subscribers yet.'); return; }
+    const rows = [['Name','Email','Date added'], ...subs.map(s => [s.name, s.email, new Date(s.dateAdded).toLocaleString()])];
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'subscribers.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+}
+
+function drawSubscriberList(container){
+  const subs = getSubscribers();
+  if(subs.length === 0){
+    container.innerHTML = `<p class="note" style="margin-top:0;">No subscribers yet.</p>`;
+    return;
+  }
+  container.innerHTML = subs.slice().reverse().map(s => `
+    <div class="product-row" data-id="${s.id}" style="padding:10px 14px;">
+      <div class="info">
+        <div class="t">${escapeHtml(s.name)}</div>
+        <div class="p">${escapeHtml(s.email)} · ${new Date(s.dateAdded).toLocaleDateString()}</div>
+      </div>
+      <div class="row-actions">
+        <button class="del">Remove</button>
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.del').forEach(btn => {
+    btn.onclick = (e) => {
+      const id = e.target.closest('.product-row').dataset.id;
+      saveSubscribers(getSubscribers().filter(s => s.id !== id));
+      drawSubscriberList(container);
+    };
+  });
 }
 
 function drawProductList(container){
@@ -532,7 +802,7 @@ function drawProductList(container){
       <img src="${escapeHtml(p.imageUrl)}" alt="" onerror="this.src='https://placehold.co/100x100/FAF7F0/1F5A50?text=—'">
       <div class="info">
         <div class="t">${escapeHtml(p.title)}</div>
-        <div class="p">$${escapeHtml(p.price)} · ${escapeHtml(p.category || 'Uncategorized')}</div>
+        <div class="p">$${escapeHtml(p.price)} · ${escapeHtml(p.category || 'Uncategorized')} · ${p.country && p.country !== 'ALL' ? escapeHtml(countryLabel(p.country)) : 'All countries'}</div>
       </div>
       <div class="row-actions">
         <button class="edit">Edit</button>
@@ -583,6 +853,13 @@ function showForm(slot, product){
           <label>Category</label>
           <input type="text" id="f_cat" value="${isEdit ? escapeHtml(product.category) : ''}" placeholder="e.g. Kitchen">
         </div>
+        <div class="field">
+          <label>Available in</label>
+          <select id="f_country">
+            <option value="ALL" ${isEdit && (!product.country || product.country === 'ALL') ? 'selected' : ''}>All countries</option>
+            ${COUNTRIES.map(c => `<option value="${c.code}" ${isEdit && product.country === c.code ? 'selected' : ''}>${escapeHtml(c.label)} only</option>`).join('')}
+          </select>
+        </div>
         <div class="field full">
           <label>Image URL</label>
           <input type="text" id="f_img" value="${isEdit ? escapeHtml(product.imageUrl) : ''}" placeholder="https://...">
@@ -605,6 +882,7 @@ function showForm(slot, product){
     const description = document.getElementById('f_desc').value.trim();
     const price = document.getElementById('f_price').value.trim();
     const category = document.getElementById('f_cat').value.trim();
+    const country = document.getElementById('f_country').value;
     const imageUrl = document.getElementById('f_img').value.trim();
     const affiliateUrl = document.getElementById('f_url').value.trim();
 
@@ -616,12 +894,12 @@ function showForm(slot, product){
     let products = getProducts();
     if(isEdit){
       products = products.map(p => p.id === product.id
-        ? {...p, title, description, price, category, imageUrl, affiliateUrl}
+        ? {...p, title, description, price, category, country, imageUrl, affiliateUrl}
         : p
       );
     } else {
       products.push({
-        id: cryptoId(), title, description, price, category, imageUrl, affiliateUrl,
+        id: cryptoId(), title, description, price, category, country, imageUrl, affiliateUrl,
         dateAdded: Date.now()
       });
     }
