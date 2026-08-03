@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIKSMORE — Handpicked Finds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#123832;
+    --teal-deep:#0B2622;
+    --teal-light:#1F5A50;
+    --mustard:#E8A33D;
+    --mustard-deep:#C9852A;
+    --paper:#FAF7F0;
+    --paper-dim:#F0EBDD;
+    --ink:#20241F;
+    --ink-soft:#5B6459;
+    --line:#D9D2C1;
+    --danger:#B5453A;
+    --font-display:'Space Grotesk', sans-serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);}
+  a{color:inherit;text-decoration:none;}
+  button{font-family:var(--font-body);cursor:pointer;}
+
+  /* ---------- Header ---------- */
+  .site-header{
+    background:var(--teal-deep);
+    color:var(--paper);
+    padding:22px 32px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  .brand{
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:26px;
+    letter-spacing:-0.02em;
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+  }
+  .brand .dot{color:var(--mustard);}
+  .site-nav{display:flex;gap:8px;align-items:center;}
+  .site-nav a, .site-nav button{
+    color:var(--paper);
+    background:transparent;
+    border:1px solid rgba(250,247,240,0.28);
+    padding:8px 16px;
+    border-radius:3px;
+    font-size:13.5px;
+    font-weight:500;
+    transition:background .15s, border-color .15s;
+  }
+  .site-nav a:hover, .site-nav button:hover{background:rgba(250,247,240,0.1);border-color:rgba(250,247,240,0.5);}
+
+  /* ---------- Disclosure ---------- */
+  .disclosure{
+    background:var(--paper-dim);
+    border-bottom:1px solid var(--line);
+    color:var(--ink-soft);
+    font-size:12.5px;
+    text-align:center;
+    padding:8px 16px;
+  }
+
+  main{max-width:1140px;margin:0 auto;padding:36px 32px 80px;}
+
+  /* ---------- Hero ---------- */
+  .hero{margin-bottom:32px;}
+  .hero h1{
+    font-family:var(--font-display);
+    font-size:clamp(28px,4vw,42px);
+    margin:0 0 8px;
+    letter-spacing:-0.02em;
+  }
+  .hero p{color:var(--ink-soft);margin:0;font-size:15.5px;max-width:560px;}
+
+  /* ---------- Controls ---------- */
+  .controls{
+    display:flex;
+    gap:12px;
+    margin:28px 0 30px;
+    flex-wrap:wrap;
+  }
+  .controls input, .controls select{
+    font-family:var(--font-body);
+    padding:10px 14px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    background:#fff;
+    font-size:14px;
+    color:var(--ink);
+  }
+  .controls input{flex:1;min-width:200px;}
+
+  /* ---------- Grid ---------- */
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+    gap:28px;
+  }
+  .card{
+    position:relative;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:20px 18px 18px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .price-tag{
+    position:absolute;
+    top:-11px;
+    left:-10px;
+    background:var(--mustard);
+    color:var(--teal-deep);
+    font-family:var(--font-mono);
+    font-weight:600;
+    font-size:14px;
+    padding:6px 14px 6px 24px;
+    clip-path:polygon(0 50%, 14px 0, 100% 0, 100% 100%, 14px 100%);
+    transform:rotate(-5deg);
+    box-shadow:2px 3px 5px rgba(0,0,0,0.22);
+    z-index:2;
+  }
+  .price-tag::before{
+    content:'';
+    position:absolute;
+    left:8px;top:50%;
+    width:5px;height:5px;
+    border-radius:50%;
+    background:var(--paper);
+    transform:translateY(-50%);
+  }
+  .card img{
+    width:100%;
+    height:170px;
+    object-fit:contain;
+    background:var(--paper-dim);
+    border-radius:3px;
+    margin-top:6px;
+  }
+  .card .cat{
+    font-family:var(--font-mono);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--teal-light);
+  }
+  .card h3{
+    font-family:var(--font-display);
+    font-size:17px;
+    margin:0;
+    line-height:1.3;
+  }
+  .card p.desc{
+    font-size:13.5px;
+    color:var(--ink-soft);
+    margin:0;
+    line-height:1.5;
+    flex:1;
+  }
+  .card .buy-btn{
+    display:inline-block;
+    text-align:center;
+    background:var(--teal);
+    color:var(--paper);
+    padding:10px 14px;
+    border-radius:3px;
+    font-weight:600;
+    font-size:13.5px;
+    margin-top:6px;
+    border:none;
+    transition:background .15s;
+  }
+  .card .buy-btn:hover{background:var(--teal-light);}
+
+  .empty-state{
+    text-align:center;
+    padding:60px 20px;
+    color:var(--ink-soft);
+  }
+  .empty-state h3{font-family:var(--font-display);color:var(--ink);}
+
+  /* ---------- Admin ---------- */
+  .admin-wrap{max-width:640px;margin:60px auto;padding:0 24px;}
+  .login-box{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:40px 36px;
+  }
+  .login-box h2{font-family:var(--font-display);margin-top:0;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink-soft);}
+  .field input, .field textarea, .field select{
+    width:100%;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-family:var(--font-body);
+    font-size:14px;
+  }
+  .field textarea{resize:vertical;min-height:70px;}
+  .btn-primary{
+    background:var(--teal);
+    color:var(--paper);
+    border:none;
+    padding:11px 20px;
+    border-radius:3px;
+    font-weight:600;
+    font-size:14px;
+  }
+  .btn-primary:hover{background:var(--teal-light);}
+  .btn-ghost{
+    background:transparent;
+    border:1px solid var(--line);
+    padding:11px 18px;
+    border-radius:3px;
+    font-weight:600;
+    font-size:14px;
+    color:var(--ink);
+  }
+  .btn-ghost:hover{background:var(--paper-dim);}
+  .error-msg{color:var(--danger);font-size:13px;margin-top:10px;}
+
+  .dash-header{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:24px;flex-wrap:wrap;gap:10px;
+  }
+  .dash-header h2{font-family:var(--font-display);margin:0;}
+
+  .product-row{
+    display:flex;gap:16px;align-items:center;
+    background:#fff;border:1px solid var(--line);border-radius:4px;
+    padding:14px 16px;margin-bottom:10px;
+  }
+  .product-row img{width:56px;height:56px;object-fit:contain;background:var(--paper-dim);border-radius:3px;}
+  .product-row .info{flex:1;min-width:0;}
+  .product-row .info .t{font-weight:600;font-size:14.5px;}
+  .product-row .info .p{font-family:var(--font-mono);color:var(--teal-light);font-size:13px;}
+  .row-actions{display:flex;gap:8px;}
+  .row-actions button{
+    border:1px solid var(--line);background:#fff;border-radius:3px;
+    padding:6px 12px;font-size:12.5px;font-weight:600;
+  }
+  .row-actions button.edit:hover{background:var(--paper-dim);}
+  .row-actions button.del{color:var(--danger);border-color:#e3c9c6;}
+  .row-actions button.del:hover{background:#FBEFEE;}
+
+  .form-card{
+    background:#fff;border:1px solid var(--line);border-radius:4px;
+    padding:26px;margin-bottom:26px;
+  }
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .form-grid .full{grid-column:1 / -1;}
+  .form-actions{display:flex;gap:10px;margin-top:8px;}
+
+  .note{
+    font-size:12.5px;color:var(--ink-soft);margin-top:8px;
+  }
+
+  @media (max-width:600px){
+    .form-grid{grid-template-columns:1fr;}
+    main{padding:28px 18px 60px;}
+    .site-header{padding:18px 18px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">PIKSMORE<span class="dot">.</span></div>
+  <nav class="site-nav" id="navArea"></nav>
+</header>
+<div class="disclosure">As an Amazon Associate, this site earns from qualifying purchases made through the links below.</div>
+
+<main id="app"></main>
+
+<script>
+/* =========================================================
+   CONFIG — change these to fit your site
+   ========================================================= */
+const SITE_NAME = "PIKSMORE";
+// Change this before you publish the site anywhere. This is a
+// simple client-side check, not real security — see notes below.
+let ADMIN_PASSWORD = localStorage.getItem('sift_admin_pw') || "Riya@135171";
+
+const STORAGE_KEY = 'sift_products';
+const AUTH_KEY = 'sift_admin_session';
+
+/* =========================================================
+   DATA LAYER
+   ========================================================= */
+function getProducts(){
+  try{
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+  }catch(e){ return []; }
+}
+function saveProducts(list){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+function seedIfEmpty(){
+  if(getProducts().length === 0){
+    saveProducts([
+      {
+        id: cryptoId(),
+        title: "Example Product — replace me",
+        description: "This is a placeholder listing so you can see how the layout looks. Edit or delete it from the admin panel.",
+        imageUrl: "https://placehold.co/400x300/FAF7F0/1F5A50?text=Product+Image",
+        price: "19.99",
+        category: "Example",
+        affiliateUrl: "https://www.amazon.com/",
+        dateAdded: Date.now()
+      }
+    ]);
+  }
+}
+function cryptoId(){
+  return 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
+}
+function isLoggedIn(){
+  return sessionStorage.getItem(AUTH_KEY) === '1';
+}
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+
+/* =========================================================
+   ROUTER
+   ========================================================= */
+window.addEventListener('hashchange', render);
+window.addEventListener('DOMContentLoaded', () => {
+  seedIfEmpty();
+  render();
+});
+
+function currentRoute(){
+  return location.hash.replace('#','') || 'home';
+}
+
+function render(){
+  const route = currentRoute();
+  renderNav(route);
+  const app = document.getElementById('app');
+  if(route === 'admin'){
+    app.innerHTML = isLoggedIn() ? '' : loginView();
+    if(isLoggedIn()){ renderDashboard(app); }
+    else{ attachLoginHandlers(); }
+  } else {
+    app.innerHTML = homeView();
+    attachHomeHandlers();
+  }
+}
+
+function renderNav(route){
+  const nav = document.getElementById('navArea');
+  if(route === 'admin' && isLoggedIn()){
+    nav.innerHTML = `<a href="#home">View site</a><button id="logoutBtn">Log out</button>`;
+    document.getElementById('logoutBtn').onclick = () => {
+      sessionStorage.removeItem(AUTH_KEY);
+      location.hash = '#home';
+    };
+  } else {
+    nav.innerHTML = `<a href="#admin">Admin</a>`;
+  }
+}
+
+/* =========================================================
+   HOME VIEW
+   ========================================================= */
+function homeView(){
+  const products = getProducts();
+  const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
+
+  return `
+    <div class="hero">
+      <h1>Handpicked finds, one click away</h1>
+      <p>A running list of products worth your attention. Tap any card to see it on Amazon.</p>
+    </div>
+    <div class="controls">
+      <input type="text" id="searchInput" placeholder="Search products…">
+      <select id="categoryFilter">
+        <option value="">All categories</option>
+        ${categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="grid" id="productGrid"></div>
+  `;
+}
+
+function attachHomeHandlers(){
+  const searchInput = document.getElementById('searchInput');
+  const categoryFilter = document.getElementById('categoryFilter');
+  const draw = () => drawGrid(searchInput.value, categoryFilter.value);
+  searchInput.addEventListener('input', draw);
+  categoryFilter.addEventListener('change', draw);
+  draw();
+}
+
+function drawGrid(search, category){
+  const grid = document.getElementById('productGrid');
+  let products = getProducts();
+
+  if(search){
+    const s = search.toLowerCase();
+    products = products.filter(p =>
+      (p.title||'').toLowerCase().includes(s) ||
+      (p.description||'').toLowerCase().includes(s)
+    );
+  }
+  if(category){
+    products = products.filter(p => p.category === category);
+  }
+
+  if(products.length === 0){
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
+      <h3>No products found</h3>
+      <p>Try a different search, or check back soon for new finds.</p>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = products.map(p => `
+    <div class="card">
+      <div class="price-tag">$${escapeHtml(p.price)}</div>
+      <img src="${escapeHtml(p.imageUrl)}" alt="${escapeHtml(p.title)}" onerror="this.src='https://placehold.co/400x300/FAF7F0/1F5A50?text=No+Image'">
+      ${p.category ? `<div class="cat">${escapeHtml(p.category)}</div>` : ''}
+      <h3>${escapeHtml(p.title)}</h3>
+      <p class="desc">${escapeHtml(p.description)}</p>
+      <a class="buy-btn" href="${escapeHtml(p.affiliateUrl)}" target="_blank" rel="noopener noreferrer sponsored">View on Amazon →</a>
+    </div>
+  `).join('');
+}
+
+/* =========================================================
+   ADMIN — LOGIN VIEW
+   ========================================================= */
+function loginView(){
+  return `
+    <div class="admin-wrap">
+      <div class="login-box">
+        <h2>Admin login</h2>
+        <div class="field">
+          <label for="pwInput">Password</label>
+          <input type="password" id="pwInput" placeholder="Enter admin password">
+        </div>
+        <button class="btn-primary" id="loginBtn">Log in</button>
+        <div class="error-msg" id="loginError" style="display:none;">Incorrect password. Try again.</div>
+        <p class="note">Default password is set in the site's code (search for ADMIN_PASSWORD). Change it before publishing this site.</p>
+      </div>
+    </div>
+  `;
+}
+
+function attachLoginHandlers(){
+  const btn = document.getElementById('loginBtn');
+  const input = document.getElementById('pwInput');
+  const err = document.getElementById('loginError');
+  const tryLogin = () => {
+    if(input.value === ADMIN_PASSWORD){
+      sessionStorage.setItem(AUTH_KEY, '1');
+      render();
+    } else {
+      err.style.display = 'block';
+    }
+  };
+  btn.onclick = tryLogin;
+  input.addEventListener('keydown', e => { if(e.key === 'Enter') tryLogin(); });
+}
+
+/* =========================================================
+   ADMIN — DASHBOARD
+   ========================================================= */
+function renderDashboard(app){
+  app.innerHTML = `
+    <div class="admin-wrap" style="max-width:900px;">
+      <div class="dash-header">
+        <h2>Manage products</h2>
+        <button class="btn-primary" id="addNewBtn">+ Add product</button>
+      </div>
+      <div id="formSlot"></div>
+      <div id="productList"></div>
+
+      <div class="form-card" style="margin-top:30px;">
+        <h3 style="font-family:var(--font-display);margin-top:0;">Change admin password</h3>
+        <div class="form-grid">
+          <div class="field full">
+            <label for="newPwInput">New password</label>
+            <input type="password" id="newPwInput" placeholder="Enter a new admin password">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn-ghost" id="savePwBtn">Save new password</button>
+        </div>
+        <p class="note">This is stored in your browser only (localStorage) and only protects this browser/device — it's not a secure, server-verified login.</p>
+      </div>
+    </div>
+  `;
+  document.getElementById('addNewBtn').onclick = () => showForm(document.getElementById('formSlot'), null);
+  document.getElementById('savePwBtn').onclick = () => {
+    const val = document.getElementById('newPwInput').value.trim();
+    if(val.length < 4){ alert('Please choose a password at least 4 characters long.'); return; }
+    ADMIN_PASSWORD = val;
+    localStorage.setItem('sift_admin_pw', val);
+    document.getElementById('newPwInput').value = '';
+    alert('Admin password updated.');
+  };
+  drawProductList(document.getElementById('productList'));
+}
+
+function drawProductList(container){
+  const products = getProducts();
+  if(products.length === 0){
+    container.innerHTML = `<div class="empty-state"><h3>No products yet</h3><p>Add your first product to get started.</p></div>`;
+    return;
+  }
+  container.innerHTML = products.map(p => `
+    <div class="product-row" data-id="${p.id}">
+      <img src="${escapeHtml(p.imageUrl)}" alt="" onerror="this.src='https://placehold.co/100x100/FAF7F0/1F5A50?text=—'">
+      <div class="info">
+        <div class="t">${escapeHtml(p.title)}</div>
+        <div class="p">$${escapeHtml(p.price)} · ${escapeHtml(p.category || 'Uncategorized')}</div>
+      </div>
+      <div class="row-actions">
+        <button class="edit">Edit</button>
+        <button class="del">Delete</button>
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.edit').forEach(btn => {
+    btn.onclick = (e) => {
+      const id = e.target.closest('.product-row').dataset.id;
+      const product = getProducts().find(p => p.id === id);
+      showForm(document.getElementById('formSlot'), product);
+      document.getElementById('formSlot').scrollIntoView({behavior:'smooth'});
+    };
+  });
+  container.querySelectorAll('.del').forEach(btn => {
+    btn.onclick = (e) => {
+      const id = e.target.closest('.product-row').dataset.id;
+      const product = getProducts().find(p => p.id === id);
+      if(confirm(`Delete "${product.title}"? This can't be undone.`)){
+        saveProducts(getProducts().filter(p => p.id !== id));
+        drawProductList(container);
+      }
+    };
+  });
+}
+
+function showForm(slot, product){
+  const isEdit = !!product;
+  slot.innerHTML = `
+    <div class="form-card">
+      <h3 style="font-family:var(--font-display);margin-top:0;">${isEdit ? 'Edit product' : 'Add a new product'}</h3>
+      <div class="form-grid">
+        <div class="field full">
+          <label>Product title</label>
+          <input type="text" id="f_title" value="${isEdit ? escapeHtml(product.title) : ''}" placeholder="e.g. Insulated Water Bottle 32oz">
+        </div>
+        <div class="field full">
+          <label>Description</label>
+          <textarea id="f_desc" placeholder="A short, honest description of the product">${isEdit ? escapeHtml(product.description) : ''}</textarea>
+        </div>
+        <div class="field">
+          <label>Price (USD)</label>
+          <input type="text" id="f_price" value="${isEdit ? escapeHtml(product.price) : ''}" placeholder="19.99">
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <input type="text" id="f_cat" value="${isEdit ? escapeHtml(product.category) : ''}" placeholder="e.g. Kitchen">
+        </div>
+        <div class="field full">
+          <label>Image URL</label>
+          <input type="text" id="f_img" value="${isEdit ? escapeHtml(product.imageUrl) : ''}" placeholder="https://...">
+        </div>
+        <div class="field full">
+          <label>Amazon affiliate link</label>
+          <input type="text" id="f_url" value="${isEdit ? escapeHtml(product.affiliateUrl) : ''}" placeholder="https://www.amazon.com/dp/XXXXXXX?tag=yourtag-20">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" id="saveProductBtn">${isEdit ? 'Save changes' : 'Add product'}</button>
+        <button class="btn-ghost" id="cancelFormBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('cancelFormBtn').onclick = () => { slot.innerHTML = ''; };
+  document.getElementById('saveProductBtn').onclick = () => {
+    const title = document.getElementById('f_title').value.trim();
+    const description = document.getElementById('f_desc').value.trim();
+    const price = document.getElementById('f_price').value.trim();
+    const category = document.getElementById('f_cat').value.trim();
+    const imageUrl = document.getElementById('f_img').value.trim();
+    const affiliateUrl = document.getElementById('f_url').value.trim();
+
+    if(!title || !affiliateUrl){
+      alert('Title and Amazon affiliate link are required.');
+      return;
+    }
+
+    let products = getProducts();
+    if(isEdit){
+      products = products.map(p => p.id === product.id
+        ? {...p, title, description, price, category, imageUrl, affiliateUrl}
+        : p
+      );
+    } else {
+      products.push({
+        id: cryptoId(), title, description, price, category, imageUrl, affiliateUrl,
+        dateAdded: Date.now()
+      });
+    }
+    saveProducts(products);
+    slot.innerHTML = '';
+    drawProductList(document.getElementById('productList'));
+  };
+}
+</script>
+</body>
+</html>
