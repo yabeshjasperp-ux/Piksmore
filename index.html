@@ -412,6 +412,18 @@ const COUNTRIES = [
   { code: 'AE', label: 'UAE' }
 ];
 
+// Currency shown per country. Edit the symbol/code here if you ever
+// need to change it — everything else picks it up automatically.
+const CURRENCIES = {
+  US:  { symbol: '$',    code: 'USD' },
+  IN:  { symbol: '₹',    code: 'INR' },
+  AE:  { symbol: 'AED ', code: 'AED' },
+  ALL: { symbol: '$',    code: 'USD' } // fallback for "All countries" products
+};
+function getCurrency(countryCode){
+  return CURRENCIES[countryCode] || CURRENCIES.ALL;
+}
+
 /* =========================================================
    DATA LAYER
    ========================================================= */
@@ -656,7 +668,7 @@ function drawGrid(search, category, countryCode){
 
   grid.innerHTML = products.map(p => `
     <div class="card">
-      <div class="price-tag">$${escapeHtml(p.price)}</div>
+      <div class="price-tag">${getCurrency(p.country).symbol}${escapeHtml(p.price)}</div>
       <img src="${escapeHtml(p.imageUrl)}" alt="${escapeHtml(p.title)}" onerror="this.src='https://placehold.co/400x300/FAF7F0/1F5A50?text=No+Image'">
       ${p.category ? `<div class="cat">${escapeHtml(p.category)}</div>` : ''}
       <h3>${escapeHtml(p.title)}</h3>
@@ -802,7 +814,7 @@ function drawProductList(container){
       <img src="${escapeHtml(p.imageUrl)}" alt="" onerror="this.src='https://placehold.co/100x100/FAF7F0/1F5A50?text=—'">
       <div class="info">
         <div class="t">${escapeHtml(p.title)}</div>
-        <div class="p">$${escapeHtml(p.price)} · ${escapeHtml(p.category || 'Uncategorized')} · ${p.country && p.country !== 'ALL' ? escapeHtml(countryLabel(p.country)) : 'All countries'}</div>
+        <div class="p">${getCurrency(p.country).symbol}${escapeHtml(p.price)} · ${escapeHtml(p.category || 'Uncategorized')} · ${p.country && p.country !== 'ALL' ? escapeHtml(countryLabel(p.country)) : 'All countries'}</div>
       </div>
       <div class="row-actions">
         <button class="edit">Edit</button>
@@ -846,19 +858,19 @@ function showForm(slot, product){
           <textarea id="f_desc" placeholder="A short, honest description of the product">${isEdit ? escapeHtml(product.description) : ''}</textarea>
         </div>
         <div class="field">
-          <label>Price (USD)</label>
-          <input type="text" id="f_price" value="${isEdit ? escapeHtml(product.price) : ''}" placeholder="19.99">
-        </div>
-        <div class="field">
-          <label>Category</label>
-          <input type="text" id="f_cat" value="${isEdit ? escapeHtml(product.category) : ''}" placeholder="e.g. Kitchen">
-        </div>
-        <div class="field">
           <label>Available in</label>
           <select id="f_country">
             <option value="ALL" ${isEdit && (!product.country || product.country === 'ALL') ? 'selected' : ''}>All countries</option>
             ${COUNTRIES.map(c => `<option value="${c.code}" ${isEdit && product.country === c.code ? 'selected' : ''}>${escapeHtml(c.label)} only</option>`).join('')}
           </select>
+        </div>
+        <div class="field">
+          <label id="priceLabel">Price (${getCurrency(isEdit ? (product.country || 'ALL') : 'ALL').code})</label>
+          <input type="text" id="f_price" value="${isEdit ? escapeHtml(product.price) : ''}" placeholder="19.99">
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <input type="text" id="f_cat" value="${isEdit ? escapeHtml(product.category) : ''}" placeholder="e.g. Kitchen">
         </div>
         <div class="field full">
           <label>Image URL</label>
@@ -877,6 +889,9 @@ function showForm(slot, product){
   `;
 
   document.getElementById('cancelFormBtn').onclick = () => { slot.innerHTML = ''; };
+  document.getElementById('f_country').onchange = (e) => {
+    document.getElementById('priceLabel').textContent = `Price (${getCurrency(e.target.value).code})`;
+  };
   document.getElementById('saveProductBtn').onclick = () => {
     const title = document.getElementById('f_title').value.trim();
     const description = document.getElementById('f_desc').value.trim();
