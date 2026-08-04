@@ -248,6 +248,11 @@
     font-size:14px;
   }
   .field textarea{resize:vertical;min-height:70px;}
+  .field .hint{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-top:5px;
+  }
   .btn-primary{
     background:var(--teal);
     color:var(--paper);
@@ -404,6 +409,13 @@ const SUBSCRIBERS_KEY = 'sift_subscribers';
 // Google Apps Script "Web app" URL — subscriber signups get sent here
 // so they land directly in your Google Sheet.
 const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx5-YegZdLrzlKK2FFnjmyQZvACrvhHtcUF5oX7wZN05cbmhrJUD72e-NP0kYZYConFmw/exec";
+
+// Optional: a separate Google Apps Script Web App URL that uploads product
+// images to a Drive folder and returns a public link, instead of embedding
+// images directly in this browser's storage. See drive-upload-apps-script.gs
+// for the script to deploy. Leave this as "" to keep using embedded uploads
+// (images stored in this browser only).
+const GOOGLE_DRIVE_UPLOAD_URL = "https://script.google.com/macros/s/AKfycbwo_MRhwZZxiJHw3DeL2xZd5IB_osTmt7I8VprkKYTew7HW-qWj8n1dXGh-HOs70EqP0w/exec";
 // code = used internally & in the URL hash (#country/US)
 // label = shown to visitors
 const COUNTRIES = [
@@ -433,7 +445,15 @@ function getProducts(){
   }catch(e){ return []; }
 }
 function saveProducts(list){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    return true;
+  }catch(e){
+    // Most likely a quota error — this happens if you've uploaded a lot
+    // of images directly (they're stored as embedded data, which is much
+    // bigger than a plain image URL).
+    return false;
+  }
 }
 function seedIfEmpty(){
   if(getProducts().length === 0){
@@ -477,6 +497,56 @@ function saveSubscribers(list){
 }
 function isValidEmail(email){
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// Amazon SiteStripe's "Image" button gives you a full HTML snippet like
+// <a href="..."><img src="https://m.media-amazon.com/images/I/xxxx.jpg" ...></a>
+// instead of a plain image URL. This pulls the real image URL out of
+// that snippet (or an amzn.to short-link's target isn't resolvable client
+// side, so we just leave plain URLs untouched either way).
+function extractImageUrl(input){
+  if(!input) return input;
+  const value = input.trim();
+  // Looks like it contains an <img ...> tag somewhere — pull out src="...".
+  if(/<img[\s>]/i.test(value)){
+    const match = value.match(/<img[^>]*\ssrc=["']([^"']+)["']/i);
+    if(match && match[1]) return match[1];
+  }
+  return value;
+}
+
+// Reads an uploaded image file, scales it down so it doesn't bloat
+// localStorage, and hands back a data URL (a self-contained "embedded"
+// image) via callback(dataUrl). maxDim caps the longer side in pixels.
+function resizeImageFile(file, maxDim, quality, callback){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      if(width > maxDim || height > maxDim){
+        if(width >= height){
+          height = Math.round(height * (maxDim / width));
+          width = maxDim;
+        } else {
+          width = Math.round(width * (maxDim / height));
+          height = maxDim;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      // Keep PNGs as PNG (for transparency), everything else as JPEG.
+      const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      callback(canvas.toDataURL(mime, quality));
+    };
+    img.onerror = () => alert("Sorry, that file couldn't be read as an image.");
+    img.src = e.target.result;
+  };
+  reader.onerror = () => alert("Sorry, that file couldn't be read.");
+  reader.readAsDataURL(file);
 }
 
 /* =========================================================
@@ -874,7 +944,17 @@ function showForm(slot, product){
         </div>
         <div class="field full">
           <label>Image URL</label>
-          <input type="text" id="f_img" value="${isEdit ? escapeHtml(product.imageUrl) : ''}" placeholder="https://...">
+          <input type="text" id="f_img" value="${isEdit ? escapeHtml(product.imageUrl) : ''}" placeholder="https://... or paste the SiteStripe Image snippet">
+          <div class="hint">Paste a plain image URL, or paste the whole SiteStripe "Image" HTML snippet — we'll pull the image link out of it automatically.</div>
+        </div>
+        <div class="field full">
+          <label>Or upload an image from your device</label>
+          <input type="file" id="f_imgFile" accept="image/*">
+          <div class="hint">This fills in the Image URL field above with an embedded copy of the photo (auto-resized). It's stored inside your browser, so it's best for a handful of images rather than hundreds.</div>
+        </div>
+        <div class="field full" id="imgPreviewField" style="${(isEdit && product.imageUrl) ? '' : 'display:none;'}">
+          <label>Preview</label>
+          <img id="imgPreview" src="${isEdit ? escapeHtml(product.imageUrl) : ''}" alt="" style="max-width:160px;max-height:160px;object-fit:contain;background:var(--paper-dim);border:1px solid var(--line);border-radius:3px;padding:6px;display:block;">
         </div>
         <div class="field full">
           <label>Amazon affiliate link</label>
@@ -892,13 +972,69 @@ function showForm(slot, product){
   document.getElementById('f_country').onchange = (e) => {
     document.getElementById('priceLabel').textContent = `Price (${getCurrency(e.target.value).code})`;
   };
+
+  const imgUrlInput = document.getElementById('f_img');
+  const imgFileInput = document.getElementById('f_imgFile');
+  const imgPreview = document.getElementById('imgPreview');
+  const imgPreviewField = document.getElementById('imgPreviewField');
+
+  const updatePreview = (url) => {
+    if(url){
+      imgPreview.src = url;
+      imgPreviewField.style.display = '';
+    } else {
+      imgPreviewField.style.display = 'none';
+    }
+  };
+  imgUrlInput.addEventListener('input', () => updatePreview(extractImageUrl(imgUrlInput.value)));
+
+  imgFileInput.addEventListener('change', () => {
+    const file = imgFileInput.files[0];
+    if(!file) return;
+    if(!file.type.startsWith('image/')){
+      alert('Please choose an image file.');
+      imgFileInput.value = '';
+      return;
+    }
+    resizeImageFile(file, 900, 0.82, async (dataUrl) => {
+      // Show it right away, and use it as a fallback if Drive upload isn't
+      // set up or fails.
+      updatePreview(dataUrl);
+      imgUrlInput.value = dataUrl;
+
+      if(GOOGLE_DRIVE_UPLOAD_URL){
+        imgUrlInput.value = 'Uploading to Google Drive…';
+        try{
+          const res = await fetch(GOOGLE_DRIVE_UPLOAD_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ imageData: dataUrl, filename: file.name })
+          });
+          const result = await res.json();
+          if(result && result.success && result.url){
+            imgUrlInput.value = result.url;
+            updatePreview(result.url);
+          } else {
+            throw new Error(result && result.error ? result.error : 'Unknown upload error');
+          }
+        } catch(err){
+          console.error('Drive upload failed, using an embedded copy instead:', err);
+          imgUrlInput.value = dataUrl;
+          updatePreview(dataUrl);
+          alert("Couldn't upload to Google Drive, so an embedded copy is being used instead (stored in this browser). Double-check GOOGLE_DRIVE_UPLOAD_URL and that the Apps Script is deployed with access set to \"Anyone.\"");
+        }
+      }
+      imgFileInput.value = ''; // ready to accept another upload if needed
+    });
+  });
+
   document.getElementById('saveProductBtn').onclick = () => {
     const title = document.getElementById('f_title').value.trim();
     const description = document.getElementById('f_desc').value.trim();
     const price = document.getElementById('f_price').value.trim();
     const category = document.getElementById('f_cat').value.trim();
     const country = document.getElementById('f_country').value;
-    const imageUrl = document.getElementById('f_img').value.trim();
+    const imageUrl = extractImageUrl(imgUrlInput.value);
     const affiliateUrl = document.getElementById('f_url').value.trim();
 
     if(!title || !affiliateUrl){
@@ -918,7 +1054,11 @@ function showForm(slot, product){
         dateAdded: Date.now()
       });
     }
-    saveProducts(products);
+    const ok = saveProducts(products);
+    if(!ok){
+      alert("Couldn't save — your browser's storage is full. This usually happens after uploading several images directly. Try using image URLs instead of uploads for some products, or remove an existing uploaded image and try again.");
+      return;
+    }
     slot.innerHTML = '';
     drawProductList(document.getElementById('productList'));
   };
