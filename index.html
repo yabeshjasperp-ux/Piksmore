@@ -415,7 +415,7 @@ const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx5-Ye
 // images directly in this browser's storage. See drive-upload-apps-script.gs
 // for the script to deploy. Leave this as "" to keep using embedded uploads
 // (images stored in this browser only).
-const GOOGLE_DRIVE_UPLOAD_URL = "https://script.google.com/macros/s/AKfycbwo_MRhwZZxiJHw3DeL2xZd5IB_osTmt7I8VprkKYTew7HW-qWj8n1dXGh-HOs70EqP0w/exec";
+const GOOGLE_DRIVE_UPLOAD_URL = "https://script.google.com/macros/s/AKfycbxyVhNrReXgTrwNRgWD1nJm-l0u4ypPN7kkDCScgls8tK6bwV5UsmUjLwxS2osTGVbYgw/exec";
 // code = used internally & in the URL hash (#country/US)
 // label = shown to visitors
 const COUNTRIES = [
@@ -762,7 +762,7 @@ function loginView(){
         </div>
         <button class="btn-primary" id="loginBtn">Log in</button>
         <div class="error-msg" id="loginError" style="display:none;">Incorrect password. Try again.</div>
-        <p class="note">Admin Login.</p>
+        <p class="note">Default password is set in the site's code (search for ADMIN_PASSWORD). Change it before publishing this site.</p>
       </div>
     </div>
   `;
