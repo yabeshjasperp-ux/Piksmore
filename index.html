@@ -406,9 +406,13 @@ const STORAGE_KEY = 'sift_products';
 const AUTH_KEY = 'sift_admin_session';
 const SUBSCRIBERS_KEY = 'sift_subscribers';
 
-// Google Apps Script "Web app" URL — subscriber signups get sent here
-// so they land directly in your Google Sheet.
-const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx5-YegZdLrzlKK2FFnjmyQZvACrvhHtcUF5oX7wZN05cbmhrJUD72e-NP0kYZYConFmw/exec";
+// Google Apps Script "Web app" URL — handles BOTH the product catalog and
+// newsletter subscribers, all in one Google Sheet (two tabs: "Products"
+// and "Subscribers"). See apps-script-backend.gs for the script to deploy.
+// This is the real source of truth for both — localStorage is only used
+// as an instant-load cache, so clearing browser data won't lose anything.
+// PASTE YOUR DEPLOYED WEB APP URL HERE:
+const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyw2inlT5LUxVpwSxhvFMZFhpsrnUoJ3VaSnXACkb90wCwCDUvS1r2r0VoQbRIbN4TP/exec";
 
 // Optional: a separate Google Apps Script Web App URL that uploads product
 // images to a Drive folder and returns a public link, instead of embedding
@@ -439,37 +443,117 @@ function getCurrency(countryCode){
 /* =========================================================
    DATA LAYER
    ========================================================= */
+// In-memory copy of the current product list, kept in sync with the
+// Google Sheet backend. getProducts() reads this synchronously so the
+// rest of the UI code doesn't need to change; refreshProductsFromServer()
+// is what actually talks to the network.
+let productsCache = [];
+
 function getProducts(){
+  return productsCache;
+}
+// Only used as a fallback/cache layer now — NOT the source of truth.
+function cacheProductsLocally(list){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
+  catch(e){ /* ignore quota errors on the cache — not critical */ }
+}
+function readLocalProductCache(){
   try{
     return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
   }catch(e){ return []; }
 }
-function saveProducts(list){
+
+// Fetches the current product list from the Google Sheet backend and
+// updates productsCache (plus the local cache). Falls back to whatever
+// was last cached locally if the request fails or no backend URL is set.
+async function refreshProductsFromServer(){
+  if(!GOOGLE_APPS_SCRIPT_URL){
+    productsCache = readLocalProductCache();
+    return productsCache;
+  }
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    const res = await fetch(`${GOOGLE_APPS_SCRIPT_URL}?action=listProducts`);
+    const data = await res.json();
+    if(data && data.success && Array.isArray(data.products)){
+      productsCache = data.products;
+      cacheProductsLocally(productsCache);
+    } else {
+      throw new Error((data && data.error) || 'Unexpected response');
+    }
+  }catch(err){
+    console.error('Could not load products from the server, using local cache instead:', err);
+    productsCache = readLocalProductCache();
+  }
+  return productsCache;
+}
+
+// Saves (creates or updates) one product on the server, then refreshes
+// the local cache. Returns true on success.
+async function saveProductRemote(product){
+  if(!GOOGLE_APPS_SCRIPT_URL){
+    // No backend configured — fall back to local-only behavior so the
+    // admin panel still works, but nothing will sync across browsers.
+    const list = getProducts();
+    const idx = list.findIndex(p => p.id === product.id);
+    if(idx === -1) list.push(product); else list[idx] = product;
+    cacheProductsLocally(list);
+    productsCache = list;
     return true;
-  }catch(e){
-    // Most likely a quota error — this happens if you've uploaded a lot
-    // of images directly (they're stored as embedded data, which is much
-    // bigger than a plain image URL).
+  }
+  try{
+    const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'saveProduct', product })
+    });
+    const data = await res.json();
+    if(!data || !data.success) throw new Error((data && data.error) || 'Save failed');
+    await refreshProductsFromServer();
+    return true;
+  }catch(err){
+    console.error('Could not save product to the server:', err);
     return false;
   }
 }
-function seedIfEmpty(){
+
+// Deletes one product on the server, then refreshes the local cache.
+async function deleteProductRemote(id){
+  if(!GOOGLE_APPS_SCRIPT_URL){
+    const list = getProducts().filter(p => p.id !== id);
+    cacheProductsLocally(list);
+    productsCache = list;
+    return true;
+  }
+  try{
+    const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'deleteProduct', id })
+    });
+    const data = await res.json();
+    if(!data || !data.success) throw new Error((data && data.error) || 'Delete failed');
+    await refreshProductsFromServer();
+    return true;
+  }catch(err){
+    console.error('Could not delete product on the server:', err);
+    return false;
+  }
+}
+
+async function seedIfEmpty(){
   if(getProducts().length === 0){
-    saveProducts([
-      {
-        id: cryptoId(),
-        title: "Example Product — replace me",
-        description: "This is a placeholder listing so you can see how the layout looks. Edit or delete it from the admin panel.",
-        imageUrl: "https://placehold.co/400x300/FAF7F0/1F5A50?text=Product+Image",
-        price: "19.99",
-        category: "Example",
-        country: "ALL",
-        affiliateUrl: "https://www.amazon.com/",
-        dateAdded: Date.now()
-      }
-    ]);
+    const seedProduct = {
+      id: cryptoId(),
+      title: "Example Product — replace me",
+      description: "This is a placeholder listing so you can see how the layout looks. Edit or delete it from the admin panel.",
+      imageUrl: "https://placehold.co/400x300/FAF7F0/1F5A50?text=Product+Image",
+      price: "19.99",
+      category: "Example",
+      country: "ALL",
+      affiliateUrl: "https://www.amazon.com/",
+      dateAdded: Date.now()
+    };
+    await saveProductRemote(seedProduct);
   }
 }
 function cryptoId(){
@@ -488,12 +572,85 @@ function countryLabel(code){
   return c ? c.label : code;
 }
 function getSubscribers(){
+  return subscribersCache;
+}
+let subscribersCache = [];
+function cacheSubscribersLocally(list){
+  try{ localStorage.setItem(SUBSCRIBERS_KEY, JSON.stringify(list)); }
+  catch(e){ /* ignore quota errors on the cache — not critical */ }
+}
+function readLocalSubscriberCache(){
   try{
     return JSON.parse(localStorage.getItem(SUBSCRIBERS_KEY)) || [];
   }catch(e){ return []; }
 }
-function saveSubscribers(list){
-  localStorage.setItem(SUBSCRIBERS_KEY, JSON.stringify(list));
+async function refreshSubscribersFromServer(){
+  if(!GOOGLE_APPS_SCRIPT_URL){
+    subscribersCache = readLocalSubscriberCache();
+    return subscribersCache;
+  }
+  try{
+    const res = await fetch(`${GOOGLE_APPS_SCRIPT_URL}?action=listSubscribers`);
+    const data = await res.json();
+    if(data && data.success && Array.isArray(data.subscribers)){
+      subscribersCache = data.subscribers;
+      cacheSubscribersLocally(subscribersCache);
+    } else {
+      throw new Error((data && data.error) || 'Unexpected response');
+    }
+  }catch(err){
+    console.error('Could not load subscribers from the server, using local cache instead:', err);
+    subscribersCache = readLocalSubscriberCache();
+  }
+  return subscribersCache;
+}
+// Adds a subscriber on the server (silently ignores duplicates there too),
+// then refreshes the local cache. Returns true on success.
+async function addSubscriberRemote(subscriber){
+  if(!GOOGLE_APPS_SCRIPT_URL){
+    const list = getSubscribers();
+    list.push(subscriber);
+    cacheSubscribersLocally(list);
+    subscribersCache = list;
+    return true;
+  }
+  try{
+    const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'addSubscriber', subscriber })
+    });
+    const data = await res.json();
+    if(!data || !data.success) throw new Error((data && data.error) || 'Save failed');
+    await refreshSubscribersFromServer();
+    return true;
+  }catch(err){
+    console.error('Could not save subscriber to the server:', err);
+    return false;
+  }
+}
+// Deletes a subscriber on the server, then refreshes the local cache.
+async function deleteSubscriberRemote(id){
+  if(!GOOGLE_APPS_SCRIPT_URL){
+    const list = getSubscribers().filter(s => s.id !== id);
+    cacheSubscribersLocally(list);
+    subscribersCache = list;
+    return true;
+  }
+  try{
+    const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'deleteSubscriber', id })
+    });
+    const data = await res.json();
+    if(!data || !data.success) throw new Error((data && data.error) || 'Delete failed');
+    await refreshSubscribersFromServer();
+    return true;
+  }catch(err){
+    console.error('Could not delete subscriber on the server:', err);
+    return false;
+  }
 }
 function isValidEmail(email){
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -553,8 +710,14 @@ function resizeImageFile(file, maxDim, quality, callback){
    ROUTER
    ========================================================= */
 window.addEventListener('hashchange', render);
-window.addEventListener('DOMContentLoaded', () => {
-  seedIfEmpty();
+window.addEventListener('DOMContentLoaded', async () => {
+  // Paint immediately with whatever was cached locally (feels instant),
+  // then fetch the real lists from the server and re-render.
+  productsCache = readLocalProductCache();
+  subscribersCache = readLocalSubscriberCache();
+  render();
+  await Promise.all([refreshProductsFromServer(), refreshSubscribersFromServer()]);
+  await seedIfEmpty();
   render();
 });
 
@@ -665,10 +828,11 @@ function attachHomeHandlers(countryCode){
 
   const subForm = document.getElementById('subscribeForm');
   const subMsg = document.getElementById('subscribeMsg');
-  subForm.addEventListener('submit', (e) => {
+  subForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const nameInput = document.getElementById('subName');
     const emailInput = document.getElementById('subEmail');
+    const submitBtn = subForm.querySelector('button[type="submit"]');
     const name = nameInput.value.trim();
     const email = emailInput.value.trim();
 
@@ -691,22 +855,18 @@ function attachHomeHandlers(countryCode){
       showMsg("You're already subscribed with that email.", false);
       return;
     }
-    subscribers.push({ id: cryptoId(), name, email, dateAdded: Date.now() });
-    saveSubscribers(subscribers);
+
+    submitBtn.disabled = true;
+    const ok = await addSubscriberRemote({ id: cryptoId(), name, email, dateAdded: Date.now() });
+    submitBtn.disabled = false;
+
+    if(!ok){
+      showMsg("Something went wrong — please try again in a moment.", false);
+      return;
+    }
     nameInput.value = '';
     emailInput.value = '';
     showMsg("Thanks! You're subscribed.", true);
-
-    // Send to Google Sheet (fire-and-forget — Apps Script doesn't return
-    // readable CORS headers, so we use no-cors and don't wait on the result).
-    if(GOOGLE_SHEET_WEB_APP_URL){
-      fetch(GOOGLE_SHEET_WEB_APP_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ name, email })
-      }).catch(() => { /* ignore network errors, local copy is already saved */ });
-    }
   });
 }
 
@@ -865,9 +1025,17 @@ function drawSubscriberList(container){
   `).join('');
 
   container.querySelectorAll('.del').forEach(btn => {
-    btn.onclick = (e) => {
+    btn.onclick = async (e) => {
       const id = e.target.closest('.product-row').dataset.id;
-      saveSubscribers(getSubscribers().filter(s => s.id !== id));
+      btn.disabled = true;
+      btn.textContent = 'Removing…';
+      const ok = await deleteSubscriberRemote(id);
+      if(!ok){
+        alert("Couldn't remove this subscriber on the server. Check your connection and try again.");
+        btn.disabled = false;
+        btn.textContent = 'Remove';
+        return;
+      }
       drawSubscriberList(container);
     };
   });
@@ -902,11 +1070,19 @@ function drawProductList(container){
     };
   });
   container.querySelectorAll('.del').forEach(btn => {
-    btn.onclick = (e) => {
+    btn.onclick = async (e) => {
       const id = e.target.closest('.product-row').dataset.id;
       const product = getProducts().find(p => p.id === id);
       if(confirm(`Delete "${product.title}"? This can't be undone.`)){
-        saveProducts(getProducts().filter(p => p.id !== id));
+        btn.disabled = true;
+        btn.textContent = 'Deleting…';
+        const ok = await deleteProductRemote(id);
+        if(!ok){
+          alert("Couldn't delete this product on the server. Check your internet connection and that GOOGLE_APPS_SCRIPT_URL is set correctly, then try again.");
+          btn.disabled = false;
+          btn.textContent = 'Delete';
+          return;
+        }
         drawProductList(container);
       }
     };
@@ -1028,7 +1204,8 @@ function showForm(slot, product){
     });
   });
 
-  document.getElementById('saveProductBtn').onclick = () => {
+  const saveBtn = document.getElementById('saveProductBtn');
+  saveBtn.onclick = async () => {
     const title = document.getElementById('f_title').value.trim();
     const description = document.getElementById('f_desc').value.trim();
     const price = document.getElementById('f_price').value.trim();
@@ -1042,21 +1219,19 @@ function showForm(slot, product){
       return;
     }
 
-    let products = getProducts();
-    if(isEdit){
-      products = products.map(p => p.id === product.id
-        ? {...p, title, description, price, category, country, imageUrl, affiliateUrl}
-        : p
-      );
-    } else {
-      products.push({
-        id: cryptoId(), title, description, price, category, country, imageUrl, affiliateUrl,
-        dateAdded: Date.now()
-      });
-    }
-    const ok = saveProducts(products);
+    const productToSave = isEdit
+      ? {...product, title, description, price, category, country, imageUrl, affiliateUrl}
+      : { id: cryptoId(), title, description, price, category, country, imageUrl, affiliateUrl, dateAdded: Date.now() };
+
+    saveBtn.disabled = true;
+    const originalLabel = saveBtn.textContent;
+    saveBtn.textContent = 'Saving…';
+
+    const ok = await saveProductRemote(productToSave);
     if(!ok){
-      alert("Couldn't save — your browser's storage is full. This usually happens after uploading several images directly. Try using image URLs instead of uploads for some products, or remove an existing uploaded image and try again.");
+      alert("Couldn't save to the server. Check your internet connection and that GOOGLE_APPS_SCRIPT_URL is set correctly (see apps-script-backend.gs), then try again. Your changes were NOT saved.");
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalLabel;
       return;
     }
     slot.innerHTML = '';
