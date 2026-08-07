@@ -185,6 +185,52 @@
     background:var(--paper-dim);
     border-radius:3px;
     margin-top:6px;
+    opacity:0;
+    transition:opacity .25s ease;
+  }
+  .card img.loaded{
+    opacity:1;
+  }
+  .img-wrap{
+    position:relative;
+    width:100%;
+    height:170px;
+    margin-top:6px;
+  }
+  .img-wrap img{
+    position:absolute;
+    inset:0;
+    margin-top:0;
+  }
+  .img-spinner{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    background:var(--paper-dim);
+    border-radius:3px;
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--ink-soft);
+    letter-spacing:0.04em;
+    transition:opacity .2s ease;
+  }
+  .img-spinner.hidden{
+    opacity:0;
+    pointer-events:none;
+  }
+  .img-spinner .dot-anim::after{
+    content:'';
+    animation:dotPulse 1.2s steps(4,end) infinite;
+  }
+  @keyframes dotPulse{
+    0%{content:'';}
+    25%{content:'.';}
+    50%{content:'..';}
+    75%{content:'...';}
+    100%{content:'';}
   }
   .card .cat{
     font-family:var(--font-mono);
@@ -912,7 +958,12 @@ function drawGrid(search, category, countryCode){
   grid.innerHTML = products.map(p => `
     <div class="card">
       <div class="price-tag">${getCurrency(p.country).symbol}${escapeHtml(p.price)}</div>
-      <img src="${escapeHtml(p.imageUrl)}" alt="${escapeHtml(p.title)}" onerror="this.src='https://placehold.co/400x300/FAF7F0/1F5A50?text=No+Image'">
+      <div class="img-wrap">
+        <div class="img-spinner"><span class="dot-anim">Loading</span></div>
+        <img src="${escapeHtml(p.imageUrl)}" alt="${escapeHtml(p.title)}" loading="lazy" decoding="async"
+          onload="this.classList.add('loaded'); this.previousElementSibling.classList.add('hidden');"
+          onerror="this.src='https://placehold.co/400x300/FAF7F0/1F5A50?text=No+Image'; this.classList.add('loaded'); this.previousElementSibling.classList.add('hidden');">
+      </div>
       ${p.category ? `<div class="cat">${escapeHtml(p.category)}</div>` : ''}
       <h3>${escapeHtml(p.title)}</h3>
       <p class="desc">${escapeHtml(p.description)}</p>
