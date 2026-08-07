@@ -487,8 +487,12 @@ async function refreshProductsFromServer(){
   return productsCache;
 }
 
-// Saves (creates or updates) one product on the server, then refreshes
-// the local cache. Returns true on success.
+// Saves (creates or updates) one product on the server, then updates the
+// in-memory cache directly (an "optimistic" update) instead of doing a
+// second slow full re-fetch of the whole product list. Returns
+// { ok: true } on success, or { ok: false, error: '...' } on failure —
+// the error string is the REAL message from the server (or fetch), so
+// the admin panel can show it instead of a generic message.
 async function saveProductRemote(product){
   if(!GOOGLE_APPS_SCRIPT_URL){
     // No backend configured — fall back to local-only behavior so the
@@ -498,7 +502,7 @@ async function saveProductRemote(product){
     if(idx === -1) list.push(product); else list[idx] = product;
     cacheProductsLocally(list);
     productsCache = list;
-    return true;
+    return { ok: true };
   }
   try{
     const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
@@ -508,21 +512,26 @@ async function saveProductRemote(product){
     });
     const data = await res.json();
     if(!data || !data.success) throw new Error((data && data.error) || 'Save failed');
-    await refreshProductsFromServer();
-    return true;
+    // Optimistic local update — avoids a second slow round trip through
+    // the whole sheet just to get back the row we already have.
+    const idx = productsCache.findIndex(p => p.id === product.id);
+    if(idx === -1) productsCache.push(product); else productsCache[idx] = product;
+    cacheProductsLocally(productsCache);
+    return { ok: true };
   }catch(err){
     console.error('Could not save product to the server:', err);
-    return false;
+    return { ok: false, error: err.message };
   }
 }
 
-// Deletes one product on the server, then refreshes the local cache.
+// Deletes one product on the server, then updates the in-memory cache
+// directly. Same { ok, error } return shape as saveProductRemote.
 async function deleteProductRemote(id){
   if(!GOOGLE_APPS_SCRIPT_URL){
     const list = getProducts().filter(p => p.id !== id);
     cacheProductsLocally(list);
     productsCache = list;
-    return true;
+    return { ok: true };
   }
   try{
     const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
@@ -532,11 +541,12 @@ async function deleteProductRemote(id){
     });
     const data = await res.json();
     if(!data || !data.success) throw new Error((data && data.error) || 'Delete failed');
-    await refreshProductsFromServer();
-    return true;
+    productsCache = productsCache.filter(p => p.id !== id);
+    cacheProductsLocally(productsCache);
+    return { ok: true };
   }catch(err){
     console.error('Could not delete product on the server:', err);
-    return false;
+    return { ok: false, error: err.message };
   }
 }
 
@@ -605,14 +615,14 @@ async function refreshSubscribersFromServer(){
   return subscribersCache;
 }
 // Adds a subscriber on the server (silently ignores duplicates there too),
-// then refreshes the local cache. Returns true on success.
+// then updates the in-memory cache directly. Same { ok, error } shape.
 async function addSubscriberRemote(subscriber){
   if(!GOOGLE_APPS_SCRIPT_URL){
     const list = getSubscribers();
     list.push(subscriber);
     cacheSubscribersLocally(list);
     subscribersCache = list;
-    return true;
+    return { ok: true };
   }
   try{
     const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
@@ -622,20 +632,22 @@ async function addSubscriberRemote(subscriber){
     });
     const data = await res.json();
     if(!data || !data.success) throw new Error((data && data.error) || 'Save failed');
-    await refreshSubscribersFromServer();
-    return true;
+    subscribersCache.push(subscriber);
+    cacheSubscribersLocally(subscribersCache);
+    return { ok: true };
   }catch(err){
     console.error('Could not save subscriber to the server:', err);
-    return false;
+    return { ok: false, error: err.message };
   }
 }
-// Deletes a subscriber on the server, then refreshes the local cache.
+// Deletes a subscriber on the server, then updates the in-memory cache
+// directly. Same { ok, error } shape.
 async function deleteSubscriberRemote(id){
   if(!GOOGLE_APPS_SCRIPT_URL){
     const list = getSubscribers().filter(s => s.id !== id);
     cacheSubscribersLocally(list);
     subscribersCache = list;
-    return true;
+    return { ok: true };
   }
   try{
     const res = await fetch(GOOGLE_APPS_SCRIPT_URL, {
@@ -645,11 +657,12 @@ async function deleteSubscriberRemote(id){
     });
     const data = await res.json();
     if(!data || !data.success) throw new Error((data && data.error) || 'Delete failed');
-    await refreshSubscribersFromServer();
-    return true;
+    subscribersCache = subscribersCache.filter(s => s.id !== id);
+    cacheSubscribersLocally(subscribersCache);
+    return { ok: true };
   }catch(err){
     console.error('Could not delete subscriber on the server:', err);
-    return false;
+    return { ok: false, error: err.message };
   }
 }
 function isValidEmail(email){
@@ -857,10 +870,10 @@ function attachHomeHandlers(countryCode){
     }
 
     submitBtn.disabled = true;
-    const ok = await addSubscriberRemote({ id: cryptoId(), name, email, dateAdded: Date.now() });
+    const result = await addSubscriberRemote({ id: cryptoId(), name, email, dateAdded: Date.now() });
     submitBtn.disabled = false;
 
-    if(!ok){
+    if(!result.ok){
       showMsg("Something went wrong — please try again in a moment.", false);
       return;
     }
@@ -1029,9 +1042,9 @@ function drawSubscriberList(container){
       const id = e.target.closest('.product-row').dataset.id;
       btn.disabled = true;
       btn.textContent = 'Removing…';
-      const ok = await deleteSubscriberRemote(id);
-      if(!ok){
-        alert("Couldn't remove this subscriber on the server. Check your connection and try again.");
+      const result = await deleteSubscriberRemote(id);
+      if(!result.ok){
+        alert("Couldn't remove this subscriber on the server:\n\n" + (result.error || 'Unknown error') + "\n\nCheck your connection and try again.");
         btn.disabled = false;
         btn.textContent = 'Remove';
         return;
@@ -1076,9 +1089,9 @@ function drawProductList(container){
       if(confirm(`Delete "${product.title}"? This can't be undone.`)){
         btn.disabled = true;
         btn.textContent = 'Deleting…';
-        const ok = await deleteProductRemote(id);
-        if(!ok){
-          alert("Couldn't delete this product on the server. Check your internet connection and that GOOGLE_APPS_SCRIPT_URL is set correctly, then try again.");
+        const result = await deleteProductRemote(id);
+        if(!result.ok){
+          alert("Couldn't delete this product on the server:\n\n" + (result.error || 'Unknown error'));
           btn.disabled = false;
           btn.textContent = 'Delete';
           return;
@@ -1197,7 +1210,7 @@ function showForm(slot, product){
           console.error('Drive upload failed, using an embedded copy instead:', err);
           imgUrlInput.value = dataUrl;
           updatePreview(dataUrl);
-          alert("Couldn't upload to Google Drive, so an embedded copy is being used instead (stored in this browser). Double-check GOOGLE_DRIVE_UPLOAD_URL and that the Apps Script is deployed with access set to \"Anyone.\"");
+          alert("Couldn't upload to Google Drive, so an embedded copy is being used instead (stored in this browser). Double-check GOOGLE_DRIVE_UPLOAD_URL and that the Apps Script is deployed with access set to \"Anyone.\" NOTE: if this embedded copy is large, saving the product may now fail with a clear \"field too long\" error — that means Drive upload needs to be fixed rather than relying on this fallback.");
         }
       }
       imgFileInput.value = ''; // ready to accept another upload if needed
@@ -1227,9 +1240,9 @@ function showForm(slot, product){
     const originalLabel = saveBtn.textContent;
     saveBtn.textContent = 'Saving…';
 
-    const ok = await saveProductRemote(productToSave);
-    if(!ok){
-      alert("Couldn't save to the server. Check your internet connection and that GOOGLE_APPS_SCRIPT_URL is set correctly (see apps-script-backend.gs), then try again. Your changes were NOT saved.");
+    const result = await saveProductRemote(productToSave);
+    if(!result.ok){
+      alert("Couldn't save to the server:\n\n" + (result.error || 'Unknown error') + "\n\nYour changes were NOT saved.");
       saveBtn.disabled = false;
       saveBtn.textContent = originalLabel;
       return;
